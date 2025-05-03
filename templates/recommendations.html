@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Recommendations - Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="mb-3">Financial Recommendations</h1>
+        <p class="text-muted">Insights and suggestions to improve your financial health</p>
+    </div>
+</div>
+
+<!-- Spending Insights -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-hover shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Spending Insights</h5>
+            </div>
+            <div class="card-body">
+                {% if spending_insights %}
+                    <div class="row">
+                        {% if spending_insights.top_categories %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Top Spending Categories</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-group list-group-flush">
+                                            {% for category in spending_insights.top_categories %}
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    {{ category.name }}
+                                                    <span class="badge bg-primary rounded-pill">{{ category.percentage }}%</span>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        {% if spending_insights.monthly_trend %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Monthly Spending Trend</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <div class="me-3">
+                                                <span class="h4">{{ spending_insights.monthly_trend.trend }}</span>
+                                            </div>
+                                            <div>
+                                                {% if spending_insights.monthly_trend.direction == 'up' %}
+                                                    <span class="text-danger">
+                                                        <i class="fas fa-arrow-up me-1"></i>{{ spending_insights.monthly_trend.percentage }}%
+                                                    </span>
+                                                {% elif spending_insights.monthly_trend.direction == 'down' %}
+                                                    <span class="text-success">
+                                                        <i class="fas fa-arrow-down me-1"></i>{{ spending_insights.monthly_trend.percentage }}%
+                                                    </span>
+                                                {% else %}
+                                                    <span class="text-muted">
+                                                        <i class="fas fa-minus me-1"></i>No Change
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <p>{{ spending_insights.monthly_trend.description }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        {% if spending_insights.patterns %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Spending Patterns</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-unstyled mb-0">
+                                            {% for pattern in spending_insights.patterns %}
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                                    {{ pattern }}
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if spending_insights.unusual_expenses %}
+                        <h6 class="mt-4 mb-3">Unusual Expenses</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Category</th>
+                                        <th>Description</th>
+                                        <th>Amount</th>
+                                        <th>Typical</th>
+                                        <th>Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for expense in spending_insights.unusual_expenses %}
+                                        <tr>
+                                            <td>{{ expense.date|format_date }}</td>
+                                            <td><span class="badge bg-secondary">{{ expense.category }}</span></td>
+                                            <td>{{ expense.description }}</td>
+                                            <td>{{ expense.amount|format_currency }}</td>
+                                            <td>{{ expense.typical|format_currency }}</td>
+                                            <td class="text-danger">+{{ expense.difference|format_currency }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-line fa-3x mb-3 text-muted"></i>
+                        <p class="text-muted">Not enough transaction data to generate spending insights.</p>
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Transactions</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Recommendations -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-hover shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Budget Recommendations</h5>
+            </div>
+            <div class="card-body">
+                {% if budget_recommendations %}
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <h6>Suggested Category Allocations</h6>
+                            <p class="text-muted small">Based on your spending history and financial best practices</p>
+                            
+                            <!-- Store chart data in hidden element -->
+                            {% if budget_recommendations and budget_recommendations.allocations %}
+                            <div id="budget-allocation-data" 
+                                 data-categories='[{% for category in budget_recommendations.allocations %}"{{ category.name }}",{% endfor %}]'
+                                 data-percentages='[{% for category in budget_recommendations.allocations %}{{ category.percentage }},{% endfor %}]'>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="chart-container" style="height: 300px;">
+                                <canvas id="budgetAllocationChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6 class="mb-0">Category Breakdown</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Category</th>
+                                                    <th>Suggested %</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for category in budget_recommendations.allocations %}
+                                                    <tr>
+                                                        <td>{{ category.name }}</td>
+                                                        <td>{{ category.percentage }}%</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if budget_recommendations.suggestions %}
+                        <hr>
+                        <h6>Budget Improvement Suggestions</h6>
+                        <div class="row">
+                            {% for suggestion in budget_recommendations.suggestions %}
+                                <div class="col-lg-4 col-md-6 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6>{{ suggestion.title }}</h6>
+                                            <p class="card-text">{{ suggestion.description }}</p>
+                                            {% if suggestion.amount %}
+                                                <span class="badge bg-success">Potential Savings: {{ suggestion.amount|format_currency }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x mb-3 text-muted"></i>
+                        <p class="text-muted">Not enough data to generate budget recommendations.</p>
+                        <p class="text-muted small">Add more transactions and create a budget to get personalized recommendations.</p>
+                        <div>
+                            <a href="{{ url_for('add_transaction') }}" class="btn btn-primary me-2">Add Transactions</a>
+                            <a href="{{ url_for('create_budget') }}" class="btn btn-outline-primary">Create Budget</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Saving Opportunities -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card card-hover shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-piggy-bank me-2"></i>Saving Opportunities</h5>
+            </div>
+            <div class="card-body">
+                {% if saving_opportunities %}
+                    <div class="row">
+                        {% for opportunity in saving_opportunities %}
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ opportunity.title }}</h5>
+                                        <p class="card-text">{{ opportunity.description }}</p>
+                                        {% if opportunity.amount %}
+                                            <div class="alert alert-success">
+                                                <strong>Potential Savings:</strong> {{ opportunity.amount|format_currency }}
+                                                {% if opportunity.timeframe %}
+                                                    <span class="text-muted">/ {{ opportunity.timeframe }}</span>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-piggy-bank fa-3x mb-3 text-muted"></i>
+                        <p class="text-muted">No saving opportunities identified yet.</p>
+                        <p class="text-muted small">Continue adding transaction data to get personalized saving recommendations.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Budget Allocation Chart
+    const budgetAllocationChartEl = document.getElementById('budgetAllocationChart');
+    if (budgetAllocationChartEl) {
+        initializeBudgetAllocationChart(budgetAllocationChartEl);
+    }
+});
+
+function initializeBudgetAllocationChart(chartElement) {
+    const dataElement = document.getElementById('budget-allocation-data');
+    if (!dataElement) return;
+    
+    try {
+        const categories = JSON.parse(dataElement.getAttribute('data-categories'));
+        const percentages = JSON.parse(dataElement.getAttribute('data-percentages'));
+        
+        const backgroundColors = [
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(54, 162, 235, 0.8)',
+            'rgba(255, 206, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)',
+            'rgba(153, 102, 255, 0.8)',
+            'rgba(255, 159, 64, 0.8)',
+            'rgba(199, 199, 199, 0.8)',
+            'rgba(83, 102, 255, 0.8)',
+            'rgba(255, 99, 192, 0.8)',
+            'rgba(0, 162, 235, 0.8)'
+        ];
+        
+        new Chart(chartElement.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: categories,
+                datasets: [{
+                    data: percentages,
+                    backgroundColor: backgroundColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + context.parsed + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Error initializing budget allocation chart:', e);
+    }
+}
+</script>
+{% endblock %}

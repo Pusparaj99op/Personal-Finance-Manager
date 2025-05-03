@@ -1,0 +1,214 @@
+/* Main Styling for Finance Tracker */
+
+:root {
+  --primary-color: #0d6efd;
+  --secondary-color: #6c757d;
+  --success-color: #198754;
+  --danger-color: #dc3545;
+  --warning-color: #ffc107;
+  --info-color: #0dcaf0;
+  --light-color: #f8f9fa;
+  --dark-color: #212529;
+}
+
+/* General styles */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}
+
+/* Dashboard styles */
+.stat-card {
+  transition: transform 0.2s;
+  border-left: 4px solid var(--primary-color);
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+}
+
+.stat-card.income {
+  border-left-color: var(--success-color);
+}
+
+.stat-card.expense {
+  border-left-color: var(--danger-color);
+}
+
+.stat-card.balance {
+  border-left-color: var(--info-color);
+}
+
+.stat-card.budget {
+  border-left-color: var(--warning-color);
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  opacity: 0.7;
+}
+
+/* Transaction list styles */
+.transaction-list .income {
+  border-left: 4px solid var(--success-color);
+}
+
+.transaction-list .expense {
+  border-left: 4px solid var(--danger-color);
+}
+
+.transaction-amount.income {
+  color: var(--success-color);
+}
+
+.transaction-amount.expense {
+  color: var(--danger-color);
+}
+
+/* Category badges */
+.category-badge {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Budget progress bars */
+.budget-progress {
+  height: 1.5rem;
+}
+
+.budget-progress.warning .progress-bar {
+  background-color: var(--warning-color);
+}
+
+.budget-progress.danger .progress-bar {
+  background-color: var(--danger-color);
+}
+
+/* Chart containers */
+.chart-container {
+  position: relative;
+  height: 300px;
+  margin-bottom: 2rem;
+}
+
+/* Login page */
+.login-form {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  background-color: var(--light-color);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.login-form h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s;
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Analysis page */
+.analysis-card {
+  transition: transform 0.2s;
+  cursor: pointer;
+  height: 100%;
+}
+
+.analysis-card:hover {
+  transform: translateY(-5px);
+}
+
+/* Form styling */
+.form-label {
+  font-weight: 500;
+}
+
+/* Settings page */
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+/* Reports page */
+.report-card {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.report-card .card-img-top {
+  height: 150px;
+  object-fit: cover;
+}
+
+/* Custom table styling */
+.table-finance thead {
+  background-color: var(--light-color);
+}
+
+/* Utility classes */
+.text-success-light {
+  color: #d1e7dd;
+}
+
+.text-danger-light {
+  color: #f8d7da;
+}
+
+.text-warning-light {
+  color: #fff3cd;
+}
+
+.text-info-light {
+  color: #cff4fc;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767.98px) {
+  .stat-card {
+    margin-bottom: 1rem;
+  }
+  
+  .chart-container {
+    height: 250px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .chart-container {
+    height: 200px;
+  }
+}
+
+/* Animation for loading states */
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.loading {
+  animation: pulse 1.5s infinite;
+}

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Transactions - Finance Tracker{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-form {
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="mb-3">Transactions</h1>
+        <p class="text-muted">Manage your financial transactions</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Add Transaction
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <button class="btn btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse">
+                <i class="fas fa-filter me-2"></i> Filters
+            </button>
+        </h5>
+    </div>
+    <div class="collapse" id="filtersCollapse">
+        <div class="card-body">
+            <form action="{{ url_for('transactions') }}" method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" 
+                           value="{{ request.args.get('start_date', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date"
+                           value="{{ request.args.get('end_date', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="type" class="form-label">Type</label>
+                    <select class="form-select" id="type" name="type">
+                        <option value="" {% if not request.args.get('type') %}selected{% endif %}>All</option>
+                        <option value="expense" {% if request.args.get('type') == 'expense' %}selected{% endif %}>Expenses</option>
+                        <option value="income" {% if request.args.get('type') == 'income' %}selected{% endif %}>Income</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="category" class="form-label">Category</label>
+                    <select class="form-select" id="category" name="category">
+                        <option value="" {% if not request.args.get('category') %}selected{% endif %}>All</option>
+                        {% for category in categories %}
+                        <option value="{{ category.name }}" {% if request.args.get('category') == category.name %}selected{% endif %}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Total Income</h5>
+                <p class="card-text h3">{{ total_income|format_currency }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">Total Expenses</h5>
+                <p class="card-text h3">{{ total_expenses|format_currency }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card {% if net_amount >= 0 %}text-white bg-info{% else %}text-white bg-dark{% endif %}">
+            <div class="card-body">
+                <h5 class="card-title">Net Amount</h5>
+                <p class="card-text h3">{{ net_amount|format_currency }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction Table -->
+<div class="card">
+    <div class="card-body p-0">
+        {% if transactions %}
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 table-finance">
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="{{ url_for('transactions', 
+                                           start_date=request.args.get('start_date', ''),
+                                           end_date=request.args.get('end_date', ''),
+                                           type=request.args.get('type', ''),
+                                           category=request.args.get('category', ''),
+                                           sort='date',
+                                           dir='asc' if request.args.get('sort') == 'date' and request.args.get('dir') == 'desc' else 'desc') }}">
+                                Date
+                                {% if request.args.get('sort', 'date') == 'date' %}
+                                    <i class="fas fa-sort-{% if request.args.get('dir') == 'desc' %}down{% else %}up{% endif %}"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>
+                            <a href="{{ url_for('transactions', 
+                                           start_date=request.args.get('start_date', ''),
+                                           end_date=request.args.get('end_date', ''),
+                                           type=request.args.get('type', ''),
+                                           category=request.args.get('category', ''),
+                                           sort='amount',
+                                           dir='asc' if request.args.get('sort') == 'amount' and request.args.get('dir') == 'desc' else 'desc') }}">
+                                Amount
+                                {% if request.args.get('sort') == 'amount' %}
+                                    <i class="fas fa-sort-{% if request.args.get('dir') == 'desc' %}down{% else %}up{% endif %}"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.transaction_date|format_date }}</td>
+                        <td>{{ tx.description }}</td>
+                        <td><span class="badge bg-secondary">{{ tx.category }}</span></td>
+                        <td>
+                            <span class="badge {% if tx.transaction_type == 'income' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ tx.transaction_type|capitalize }}
+                            </span>
+                        </td>
+                        <td class="{% if tx.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                            {% if tx.transaction_type == 'income' %}+{% else %}-{% endif %}{{ tx.amount|format_currency }}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('edit_transaction', transaction_id=tx.transaction_id) }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ tx.transaction_id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Delete Modal -->
+                            <div class="modal fade" id="deleteModal{{ tx.transaction_id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Confirm Delete</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Are you sure you want to delete this transaction?</p>
+                                            <p><strong>{{ tx.description }}</strong> - {{ tx.amount|format_currency }}</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form action="{{ url_for('delete_transaction', transaction_id=tx.transaction_id) }}" method="post">
+                                                <button type="submit" class="btn btn-danger">Delete</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-3x mb-3 text-muted"></i>
+            <p class="text-muted">No transactions found matching your criteria.</p>
+            <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Transaction</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-open filters if any filter is active
+    if (
+        '{{ request.args.get("start_date") }}' || 
+        '{{ request.args.get("end_date") }}' || 
+        '{{ request.args.get("type") }}' || 
+        '{{ request.args.get("category") }}'
+    ) {
+        var filtersCollapse = document.getElementById('filtersCollapse');
+        var bsCollapse = new bootstrap.Collapse(filtersCollapse, {
+            toggle: true
+        });
+    }
+});
+</script>
+{% endblock %}

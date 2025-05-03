@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="mb-3">Dashboard</h1>
+        <p class="text-muted">Welcome to your financial overview</p>
+    </div>
+</div>
+
+<!-- Financial statistics -->
+<div class="row mb-4">
+    <!-- Monthly Income -->
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card stat-card income h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-1">Monthly Income</h6>
+                        <h3 class="mb-0">{{ total_income|format_currency }}</h3>
+                    </div>
+                    <div class="stat-icon text-success">
+                        <i class="fas fa-arrow-circle-up"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monthly Expenses -->
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card stat-card expense h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-1">Monthly Expenses</h6>
+                        <h3 class="mb-0">{{ total_expenses|format_currency }}</h3>
+                    </div>
+                    <div class="stat-icon text-danger">
+                        <i class="fas fa-arrow-circle-down"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monthly Balance -->
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card stat-card balance h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-1">Monthly Balance</h6>
+                        <h3 class="mb-0 {% if monthly_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ monthly_balance|format_currency }}
+                        </h3>
+                    </div>
+                    <div class="stat-icon {% if monthly_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        <i class="fas fa-{% if monthly_balance >= 0 %}plus{% else %}minus{% endif %}-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Budget Status -->
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card stat-card budget h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted mb-1">Budget Status</h6>
+                        {% if budget %}
+                            <h3 class="mb-0">{{ (budget.total_spent / budget.total_limit * 100)|round(1) }}%</h3>
+                            <small class="text-muted">{{ budget.remaining|format_currency }} remaining</small>
+                        {% else %}
+                            <h3 class="mb-0">No Budget</h3>
+                            <small><a href="{{ url_for('create_budget') }}">Create one</a></small>
+                        {% endif %}
+                    </div>
+                    <div class="stat-icon text-warning">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Transactions -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Transactions</h5>
+                <a href="{{ url_for('transactions') }}" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                {% if transactions %}
+                    <div class="list-group list-group-flush transaction-list">
+                        {% for tx in transactions %}
+                            <div class="list-group-item list-group-item-action {{ tx.transaction_type }}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ tx.description }}</h6>
+                                    <small class="transaction-amount {{ tx.transaction_type }}">
+                                        {% if tx.transaction_type == 'income' %}+{% else %}-{% endif %}{{ tx.amount|format_currency }}
+                                    </small>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span class="badge bg-secondary category-badge">{{ tx.category }}</span>
+                                        <small class="text-muted">{{ tx.transaction_date|format_date }}</small>
+                                    </div>
+                                    <div>
+                                        <a href="{{ url_for('edit_transaction', transaction_id=tx.transaction_id) }}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted">No transactions yet</p>
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Transaction</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Spending by Category -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Spending by Category</h5>
+                <a href="{{ url_for('reports') }}" class="btn btn-sm btn-primary">View Reports</a>
+            </div>
+            <div class="card-body">
+                {% if top_categories %}
+                    <div id="category-chart-data" 
+                         data-categories="{{ top_categories|map(attribute=0)|list|tojson }}"
+                         data-amounts="{{ top_categories|map(attribute=1)|list|tojson }}"></div>
+                    <div class="chart-container mb-3">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Amount</th>
+                                    <th>% of Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set total = total_expenses %}
+                                {% for category, amount in top_categories %}
+                                    <tr>
+                                        <td>{{ category }}</td>
+                                        <td>{{ amount|format_currency }}</td>
+                                        <td>{{ (amount / total * 100)|round(1) }}%</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted">No expense data available</p>
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Transaction</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if budget_vs_actual %}
+<!-- Budget Progress -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Budget Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Budget</th>
+                                <th>Spent</th>
+                                <th>Remaining</th>
+                                <th width="30%">Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in budget_vs_actual %}
+                                <tr>
+                                    <td>{{ item.category }}</td>
+                                    <td>{{ item.limit|format_currency }}</td>
+                                    <td>{{ item.spent|format_currency }}</td>
+                                    <td class="{% if item.remaining < 0 %}text-danger{% endif %}">
+                                        {{ item.remaining|format_currency }}
+                                    </td>
+                                    <td>
+                                        <div class="progress budget-progress {% if item.percent >= 90 %}danger{% elif item.percent >= 75 %}warning{% endif %}">
+                                            <div class="progress-bar progress-width-custom" role="progressbar" 
+                                                 data-percent="{{ min(item.percent, 100) }}"
+                                                 aria-valuenow="{{ item.percent|round }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ item.percent|round }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if unusual_expenses %}
+<!-- Unusual Expenses -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Unusual Expenses</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Typical</th>
+                                <th>Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for exp in unusual_expenses %}
+                                <tr>
+                                    <td>{{ exp.date|format_date }}</td>
+                                    <td>{{ exp.description }}</td>
+                                    <td>{{ exp.category }}</td>
+                                    <td>{{ exp.amount|format_currency }}</td>
+                                    <td>{{ exp.average_amount|format_currency }}</td>
+                                    <td class="text-danger">+{{ (exp.amount - exp.average_amount)|format_currency }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set width for progress bars based on data-percent attribute
+    document.querySelectorAll('.progress-width-custom').forEach(function(bar) {
+        const percent = bar.getAttribute('data-percent') || 0;
+        bar.style.width = percent + '%';
+    });
+    
+    // Initialize category chart if the container exists
+    const categoryChartElement = document.getElementById('categoryChart');
+    if (categoryChartElement) {
+        initializeCategoryChart(categoryChartElement);
+    }
+});
+
+// Function to initialize the category spending chart
+function initializeCategoryChart(chartElement) {
+    // Parse the data from data attributes
+    const chartDataElement = document.getElementById('category-chart-data');
+    if (!chartDataElement) return;
+    
+    try {
+        const chartData = JSON.parse(chartDataElement.getAttribute('data-categories'));
+        const chartAmounts = JSON.parse(chartDataElement.getAttribute('data-amounts'));
+        
+        const categoryData = {
+            labels: chartData,
+            datasets: [{
+                data: chartAmounts,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)',
+                    'rgba(199, 199, 199, 0.8)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        
+        const categoryCtx = chartElement.getContext('2d');
+        new Chart(categoryCtx, {
+            type: 'doughnut',
+            data: categoryData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Error initializing chart:', e);
+    }
+}
+</script>
+{% endblock %}
+{% endblock %}
