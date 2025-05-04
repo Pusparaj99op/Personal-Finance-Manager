@@ -205,7 +205,8 @@ def add_transaction():
     """Add new transaction page"""
     # Get all categories for the dropdown
     categories = db_manager.get_all_categories()
-    category_choices = [(c['name'], c['name']) for c in categories]
+    # Fix: Access Category attributes properly instead of treating them as dictionaries
+    category_choices = [(c.name, c.name) for c in categories]
     
     # Create form and set category choices
     form = TransactionForm()
@@ -241,7 +242,8 @@ def edit_transaction(transaction_id):
     
     # Get all categories for the dropdown
     categories = db_manager.get_all_categories()
-    category_choices = [(c['name'], c['name']) for c in categories]
+    # Fix: Access Category attributes properly instead of treating them as dictionaries
+    category_choices = [(c.name, c.name) for c in categories]
     
     # Create form and set category choices
     form = TransactionForm()
@@ -366,6 +368,17 @@ def create_budget():
     # Get categories for category limits
     categories = db_manager.get_all_categories(category_type='expense')
     
+    # Add current date and next month date for default values
+    now = datetime.now()
+    # Calculate the first day of next month for end_date default
+    if now.month == 12:
+        next_month = datetime(now.year + 1, 1, 1)
+    else:
+        next_month = datetime(now.year, now.month + 1, 1)
+    # Get last day of next month
+    _, last_day = monthrange(next_month.year, next_month.month)
+    next_month = datetime(next_month.year, next_month.month, last_day)
+    
     if form.validate_on_submit():
         # Create budget object
         budget = Budget(
@@ -387,7 +400,8 @@ def create_budget():
         flash('Budget created successfully!', 'success')
         return redirect(url_for('budget'))
     
-    return render_template('budget_form.html', form=form, categories=categories)
+    # Pass all_categories to match what the template is expecting
+    return render_template('budget_form.html', form=form, all_categories=categories, now=now, next_month=next_month)
 
 @app.route('/categories', methods=['GET'])
 def categories():
@@ -563,16 +577,39 @@ def reports():
 @app.route('/recommendations', methods=['GET'])
 def recommendations():
     """Budget recommendations page"""
-    advisor = BudgetAdvisor(db_manager)
+    # Get transactions from the database first
+    transactions = db_manager.get_all_transactions()
     
-    # Get spending insights
-    spending_insights = advisor.analyze_spending_patterns()
+    # Create Transaction objects from dictionary data
+    transaction_objects = []
+    for t in transactions:
+        # Make sure to use the transaction_type from the database record
+        # Default to 'expense' if not present
+        transaction = Transaction(
+            transaction_id=t.get('transaction_id'),
+            description=t.get('description', ''),
+            amount=t.get('amount', 0),
+            category=t.get('category', 'Uncategorized'),
+            transaction_date=t.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
+            transaction_type=t.get('transaction_type', 'expense')  # Ensure transaction_type is set
+        )
+        # Double-check that transaction_type is set properly
+        if not hasattr(transaction, 'transaction_type') or not transaction.transaction_type:
+            transaction.transaction_type = 'expense'  # Default fallback
+            
+        transaction_objects.append(transaction)
+    
+    # Then pass the transaction objects to BudgetAdvisor
+    advisor = BudgetAdvisor(transaction_objects)
+    
+    # Get budget health summary
+    spending_insights = advisor.get_budget_health_summary()
     
     # Get budget recommendations
-    budget_recommendations = advisor.generate_budget_recommendations()
+    budget_recommendations = advisor.generate_budget_recommendation()
     
-    # Get saving opportunities
-    saving_opportunities = advisor.identify_saving_opportunities()
+    # Use the recommendation's savings_opportunities directly
+    saving_opportunities = budget_recommendations.get('savings_opportunities', [])
     
     return render_template('recommendations.html',
                           spending_insights=spending_insights,

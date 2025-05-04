@@ -29,6 +29,35 @@ def analyze_spending_trends(
     # Convert transactions to DataFrame for easier analysis
     df = transactions_to_dataframe(transactions)
     
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'transaction_date' not in df.columns:
+        return {
+            "total_spending": Decimal('0'),
+            "avg_monthly_spending": Decimal('0'),
+            "top_categories": [],
+            "month_over_month_change": Decimal('0'),
+            "spending_trend": "neutral",
+            "highest_spending_day": None,
+            "highest_spending_month": None
+        }
+    
+    # Check if transaction_type column exists, if not create it
+    if 'transaction_type' not in df.columns:
+        # Add the transaction_type column based on Transaction object attributes
+        transaction_types = []
+        for transaction in transactions:
+            if hasattr(transaction, 'transaction_type'):
+                transaction_types.append(transaction.transaction_type)
+            else:
+                transaction_types.append('expense')  # Default to expense
+        
+        # If DataFrame and transactions list have the same length, add the column
+        if len(df) == len(transaction_types):
+            df['transaction_type'] = transaction_types
+        else:
+            # If lengths don't match, add a default value
+            df['transaction_type'] = 'expense'
+    
     # Filter to only include expenses from the relevant period
     end_date = datetime.now()
     start_date = end_date - timedelta(days=30 * period_months)
@@ -139,6 +168,14 @@ def identify_unusual_expenses(
     # Convert transactions to DataFrame
     df = transactions_to_dataframe(transactions)
     
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'transaction_date' not in df.columns or 'category' not in df.columns:
+        return []
+    
+    # Check if transaction_type column exists, if not create it
+    if 'transaction_type' not in df.columns:
+        df['transaction_type'] = 'expense'  # Default all to expense
+    
     # Filter to only include expenses
     expense_df = df[df['transaction_type'] == 'expense']
     
@@ -152,21 +189,26 @@ def identify_unusual_expenses(
     unusual_expenses = []
     
     for _, row in expense_df.iterrows():
-        category = row['category']
-        amount = row['amount']
-        
-        # If category only has one transaction, we can't determine if it's unusual
-        if category in category_avg:
-            avg_for_category = category_avg[category]
+        try:
+            category = row['category']
+            amount = row['amount']
             
-            # Check if significantly higher than average
-            if amount > avg_for_category * threshold_multiplier:
-                # Find the original Transaction object
-                transaction_id = row['transaction_id']
-                for transaction in transactions:
-                    if transaction.transaction_id == transaction_id:
-                        unusual_expenses.append(transaction)
-                        break
+            # If category only has one transaction, we can't determine if it's unusual
+            if category in category_avg:
+                avg_for_category = category_avg[category]
+                
+                # Check if significantly higher than average
+                if amount > avg_for_category * threshold_multiplier:
+                    # Find the original Transaction object
+                    transaction_id = row.get('transaction_id')
+                    if transaction_id is not None:
+                        for transaction in transactions:
+                            if hasattr(transaction, 'transaction_id') and transaction.transaction_id == transaction_id:
+                                unusual_expenses.append(transaction)
+                                break
+        except (KeyError, TypeError, AttributeError):
+            # Skip problematic rows
+            continue
     
     return unusual_expenses
 
@@ -188,6 +230,14 @@ def analyze_recurring_expenses(
     # Convert transactions to DataFrame
     df = transactions_to_dataframe(transactions)
     
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'transaction_date' not in df.columns:
+        return {"monthly": [], "weekly": [], "other": []}
+    
+    # Check if transaction_type column exists, if not create it
+    if 'transaction_type' not in df.columns:
+        df['transaction_type'] = 'expense'  # Default all to expense
+    
     # Filter to only include expenses
     expense_df = df[df['transaction_type'] == 'expense']
     
@@ -201,14 +251,18 @@ def analyze_recurring_expenses(
     potential_recurring = defaultdict(list)
     
     for _, row in expense_df.iterrows():
-        key = f"{row['description']}-{row['category']}"
-        potential_recurring[key].append({
-            "transaction_id": row['transaction_id'],
-            "amount": row['amount'],
-            "date": row['transaction_date'],
-            "description": row['description'],
-            "category": row['category']
-        })
+        try:
+            key = f"{row['description']}-{row['category']}"
+            potential_recurring[key].append({
+                "transaction_id": row.get('transaction_id'),
+                "amount": row.get('amount', 0),
+                "date": row.get('transaction_date', datetime.now()),
+                "description": row.get('description', ''),
+                "category": row.get('category', 'Uncategorized')
+            })
+        except (KeyError, TypeError, AttributeError):
+            # Skip problematic rows
+            continue
     
     # Filter out groups with too few occurrences
     recurring = {
@@ -223,38 +277,51 @@ def analyze_recurring_expenses(
     for group_key, group_transactions in recurring.items():
         if len(group_transactions) < 2:
             continue
-            
-        # Calculate average time between transactions
-        dates = [t["date"] for t in group_transactions]
-        deltas = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))]
-        avg_delta = sum(deltas) / len(deltas)
         
-        # Classify by average delta
-        if 25 <= avg_delta <= 35:  # Monthly
-            result["monthly"].append({
-                "description": group_transactions[0]["description"],
-                "category": group_transactions[0]["category"],
-                "avg_amount": sum(t["amount"] for t in group_transactions) / len(group_transactions),
+        try:    
+            # Calculate average time between transactions
+            dates = [t["date"] for t in group_transactions]
+            deltas = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))]
+            if not deltas:
+                continue
+            
+            avg_delta = sum(deltas) / len(deltas)
+            
+            # Calculate average amount safely
+            amounts = [float(t.get("amount", 0)) for t in group_transactions]
+            if not amounts:
+                avg_amount = 0
+            else:
+                avg_amount = sum(amounts) / len(amounts)
+            
+            # Get a safe last date
+            try:
+                last_date = max(dates).strftime("%Y-%m-%d")
+            except (ValueError, AttributeError):
+                last_date = datetime.now().strftime("%Y-%m-%d")
+            
+            # Common attributes for all types
+            base_record = {
+                "description": group_transactions[0].get("description", ""),
+                "category": group_transactions[0].get("category", "Uncategorized"),
+                "avg_amount": avg_amount,
                 "occurrences": len(group_transactions),
-                "last_date": max(dates).strftime("%Y-%m-%d")
-            })
-        elif 5 <= avg_delta <= 9:  # Weekly
-            result["weekly"].append({
-                "description": group_transactions[0]["description"],
-                "category": group_transactions[0]["category"],
-                "avg_amount": sum(t["amount"] for t in group_transactions) / len(group_transactions),
-                "occurrences": len(group_transactions),
-                "last_date": max(dates).strftime("%Y-%m-%d")
-            })
-        else:  # Other periodic
-            result["other"].append({
-                "description": group_transactions[0]["description"],
-                "category": group_transactions[0]["category"],
-                "avg_amount": sum(t["amount"] for t in group_transactions) / len(group_transactions),
-                "occurrences": len(group_transactions),
-                "avg_days_between": avg_delta,
-                "last_date": max(dates).strftime("%Y-%m-%d")
-            })
+                "last_date": last_date
+            }
+            
+            # Classify by average delta
+            if 25 <= avg_delta <= 35:  # Monthly
+                result["monthly"].append(base_record)
+            elif 5 <= avg_delta <= 9:  # Weekly
+                result["weekly"].append(base_record)
+            else:  # Other periodic
+                other_record = base_record.copy()
+                other_record["avg_days_between"] = avg_delta
+                result["other"].append(other_record)
+                
+        except (ValueError, TypeError, AttributeError, IndexError, ZeroDivisionError) as e:
+            # Skip problematic transaction groups
+            continue
     
     return result
 
@@ -275,6 +342,14 @@ def forecast_monthly_expenses(
     """
     # Convert transactions to DataFrame
     df = transactions_to_dataframe(transactions)
+    
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'transaction_date' not in df.columns:
+        return {}
+    
+    # Check if transaction_type column exists, if not create it
+    if 'transaction_type' not in df.columns:
+        df['transaction_type'] = 'expense'  # Default all to expense
     
     # Filter to only include expenses
     expense_df = df[df['transaction_type'] == 'expense']
@@ -341,22 +416,39 @@ def transactions_to_dataframe(transactions: List[Transaction]) -> pd.DataFrame:
     Returns:
         Pandas DataFrame with transaction data
     """
+    # Handle empty transactions list
+    if not transactions:
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(columns=[
+            'transaction_id', 'amount', 'category', 'description',
+            'transaction_date', 'transaction_type'
+        ])
+    
     data = []
     for transaction in transactions:
-        data.append({
-            'transaction_id': transaction.transaction_id,
-            'amount': float(transaction.amount),
-            'category': transaction.category,
-            'description': transaction.description,
-            'transaction_date': transaction.transaction_date,
-            'transaction_type': transaction.transaction_type,
-        })
+        # Handle potentially missing attributes safely
+        try:
+            row_data = {
+                'transaction_id': getattr(transaction, 'transaction_id', None),
+                'amount': float(getattr(transaction, 'amount', 0)),
+                'category': getattr(transaction, 'category', 'Uncategorized'),
+                'description': getattr(transaction, 'description', ''),
+                'transaction_date': getattr(transaction, 'transaction_date', datetime.now()),
+                'transaction_type': getattr(transaction, 'transaction_type', 'expense')
+            }
+            data.append(row_data)
+        except (ValueError, TypeError, AttributeError) as e:
+            # Skip transactions with invalid data
+            continue
     
+    # Create DataFrame
     df = pd.DataFrame(data)
     
     # Ensure transaction_date is datetime
-    if not df.empty:
-        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
+    if not df.empty and 'transaction_date' in df.columns:
+        df['transaction_date'] = pd.to_datetime(df['transaction_date'], errors='coerce')
+        # Replace NaT values with current date
+        df['transaction_date'].fillna(datetime.now(), inplace=True)
     
     return df
 
@@ -378,21 +470,37 @@ def calculate_category_allocations(
     # Convert transactions to DataFrame
     df = transactions_to_dataframe(transactions)
     
+    # Check if DataFrame is empty or missing required columns
+    if df.empty or 'transaction_date' not in df.columns:
+        return {}
+    
+    # Check if transaction_type column exists, if not create it
+    if 'transaction_type' not in df.columns:
+        df['transaction_type'] = 'expense'  # Default all to expense
+    
     # Filter to only include expenses from recent months
     end_date = datetime.now()
     start_date = end_date - timedelta(days=30 * months)
     
-    expense_df = df[
-        (df['transaction_type'] == 'expense') &
-        (df['transaction_date'] >= start_date) &
-        (df['transaction_date'] <= end_date)
-    ]
+    try:
+        expense_df = df[
+            (df['transaction_type'] == 'expense') &
+            (df['transaction_date'] >= start_date) &
+            (df['transaction_date'] <= end_date)
+        ]
+    except Exception:
+        # If filtering fails, return empty result
+        return {}
     
     if expense_df.empty:
         return {}
     
     # Calculate total spending
     total_spending = expense_df['amount'].sum()
+    
+    # Prevent division by zero
+    if total_spending == 0:
+        return {}
     
     # Calculate spending by category
     category_spending = expense_df.groupby('category')['amount'].sum()
